@@ -16,6 +16,8 @@ namespace FreePIE.Core.Plugins
         // Mouse position state variables
         private double deltaXOut;
         private double deltaYOut;
+        private int absoluteX = 0;
+        private int absoluteY = 0;
         private int wheel;
         public const int WheelMax = 120;
 
@@ -82,12 +84,19 @@ namespace FreePIE.Core.Plugins
         public override void DoBeforeNextExecute()
         {
             // If a mouse command was given in the script, issue it all at once right here
-            if ((int)deltaXOut != 0 || (int)deltaYOut != 0 || wheel != 0)
+            if ((int)deltaXOut != 0 || (int)deltaYOut != 0 || wheel != 0 || absoluteX != 0 || absoluteY != 0)
             {
 
                 var input = new MouseKeyIO.INPUT[1];
                 input[0].type = MouseKeyIO.INPUT_MOUSE;
-                input[0].mi = MouseInput((int)deltaXOut, (int)deltaYOut, (uint)wheel, 0, MouseKeyIO.MOUSEEVENTF_MOVE | MouseKeyIO.MOUSEEVENTF_WHEEL);
+                if (absoluteX != 0 || absoluteY != 0)
+                {
+                    input[0].mi = MouseInput(absoluteX, absoluteY, (uint)wheel, 0, MouseKeyIO.MOUSEEVENTF_MOVE | MouseKeyIO.MOUSEEVENTF_WHEEL | MouseKeyIO.MOUSEEVENTF_ABSOLUTE);
+                }
+                else
+                {
+                    input[0].mi = MouseInput((int)deltaXOut, (int)deltaYOut, (uint)wheel, 0, MouseKeyIO.MOUSEEVENTF_MOVE | MouseKeyIO.MOUSEEVENTF_WHEEL);
+                 }
 
                 MouseKeyIO.SendInput(1, input, Marshal.SizeOf(input[0].GetType()));
 
@@ -100,10 +109,13 @@ namespace FreePIE.Core.Plugins
                 {
                     deltaYOut = deltaYOut - (int)deltaYOut;
                 }
-
+                
+                absoluteX = 0;
+                absoluteY = 0;
                 wheel = 0;
-            }
+             }
 
+         }
             currentMouseState = null;  // flush the mouse state
 
             setButtonPressedStrategy.Do();
@@ -231,6 +243,14 @@ namespace FreePIE.Core.Plugins
         {
             setButtonPressedStrategy.Add(button, state);
         }
+
+        public void setAbsolute (int x, int y)
+        {
+            absoluteX = x;
+            absoluteY = y;
+        }
+
+
     }
 
     [Global(Name = "mouse")]
@@ -258,6 +278,11 @@ namespace FreePIE.Core.Plugins
         {
             get { return plugin.DeltaY; }
             set { plugin.DeltaY = value; }
+        }
+
+        public void absolute(int x, int y)
+        {
+            plugin.setAbsolute(x, y);
         }
 
         public int wheel
