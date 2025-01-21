@@ -6,6 +6,8 @@ using FreePIE.Core.Contracts;
 using FreePIE.Core.Plugins.Strategies;
 using SlimDX.DirectInput;
 using SlimDX.RawInput;
+using System.Windows.Forms;
+using System.Drawing;
 
 namespace FreePIE.Core.Plugins
 {
@@ -16,8 +18,8 @@ namespace FreePIE.Core.Plugins
         // Mouse position state variables
         private double deltaXOut;
         private double deltaYOut;
-        private int absoluteX = 0;
-        private int absoluteY = 0;
+        public float absoluteX = -1;
+        public float absoluteY = -1;
         private int wheel;
         public const int WheelMax = 120;
 
@@ -89,9 +91,19 @@ namespace FreePIE.Core.Plugins
 
                 var input = new MouseKeyIO.INPUT[1];
                 input[0].type = MouseKeyIO.INPUT_MOUSE;
-                if (absoluteX != 0 || absoluteY != 0)
+                if (absoluteX != -1 || absoluteY != -1)
                 {
-                    input[0].mi = MouseInput(absoluteX, absoluteY, (uint)wheel, 0, MouseKeyIO.MOUSEEVENTF_MOVE | MouseKeyIO.MOUSEEVENTF_WHEEL | MouseKeyIO.MOUSEEVENTF_ABSOLUTE);
+                    if (absoluteX == -1)
+                    {
+                        absoluteX = (float)Cursor.Position.X / SystemInformation.VirtualScreen.Width * 65535+1;
+                    }
+
+                    if (absoluteY == -1)
+                    {
+                        absoluteY = (float)Cursor.Position.Y / SystemInformation.VirtualScreen.Height * 65535+1;
+                    }
+                    
+                    input[0].mi = MouseInput((int)absoluteX, (int)absoluteY, (uint)wheel, 0, MouseKeyIO.MOUSEEVENTF_MOVE | MouseKeyIO.MOUSEEVENTF_WHEEL | MouseKeyIO.MOUSEEVENTF_ABSOLUTE);
                 }
                 else
                 {
@@ -110,8 +122,8 @@ namespace FreePIE.Core.Plugins
                     deltaYOut = deltaYOut - (int)deltaYOut;
                 }
                 
-                absoluteX = 0;
-                absoluteY = 0;
+                absoluteX = -1;
+                absoluteY = -1;
                 wheel = 0;
              }
 
@@ -242,14 +254,6 @@ namespace FreePIE.Core.Plugins
         {
             setButtonPressedStrategy.Add(button, state);
         }
-
-        public void setAbsolute (int x, int y)
-        {
-            absoluteX = x;
-            absoluteY = y;
-        }
-
-
     }
 
     [Global(Name = "mouse")]
@@ -279,9 +283,15 @@ namespace FreePIE.Core.Plugins
             set { plugin.DeltaY = value; }
         }
 
-        public void absolute(int x, int y)
+        public int X
         {
-            plugin.setAbsolute(x, y);
+            get { return Cursor.Position.X; }
+            set { plugin.absoluteX = (float)value / SystemInformation.VirtualScreen.Width * 65535; }
+        }
+        public int Y
+        {
+            get { return Cursor.Position.Y; }
+            set { plugin.absoluteY = (float)value / SystemInformation.VirtualScreen.Height * 65535; }
         }
 
         public int wheel
