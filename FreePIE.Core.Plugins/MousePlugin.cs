@@ -283,12 +283,12 @@ namespace FreePIE.Core.Plugins
             set { plugin.DeltaY = value; }
         }
 
-        public int X
+        public int x
         {
             get { return Cursor.Position.X; }
             set { plugin.absoluteX = (float)value / SystemInformation.VirtualScreen.Width * 65535; }
         }
-        public int Y
+        public int y
         {
             get { return Cursor.Position.Y; }
             set { plugin.absoluteY = (float)value / SystemInformation.VirtualScreen.Height * 65535; }
