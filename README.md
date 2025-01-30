@@ -1,4 +1,4 @@
-FreePIE
+FreePIE 64-bit version
 =======
 
 Programmable Input Emulator
