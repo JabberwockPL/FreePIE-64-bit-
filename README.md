@@ -1,5 +1,5 @@
 FreePIE 64-bit version
-=======
+======================
 
 This is the latest [FreePIE](http://andersmalmgren.github.io/FreePIE/) software developed by Anders Malmgren, modified so that it works with 64-bit plugins. Note that it most likely will break compatibility with older plugins (the internal plugins should work). Expect some bugs, quirks or irregularities.
 
