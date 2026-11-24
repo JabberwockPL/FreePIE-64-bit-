@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Caliburn.Micro;
+using FreePIE.Core.Model.Events;
 using FreePIE.Core.Persistence;
 using FreePIE.GUI.Events;
 using FreePIE.GUI.Result;
@@ -14,11 +15,13 @@ namespace FreePIE.GUI.Shells.Curves
     {
         private readonly ISettingsManager settingsManager;
         private readonly Func<CurveViewModel> curveModelFactory;
+        private readonly IEventAggregator eventAggregator;
 
         public CurveSettingsViewModel(IResultFactory resultFactory, ISettingsManager settingsManager, Func<CurveViewModel> curveModelFactory, IEventAggregator eventAggregator) : base(resultFactory)
         {
             this.settingsManager = settingsManager;
             this.curveModelFactory = curveModelFactory;
+            this.eventAggregator = eventAggregator;
             DisplayName = "Curve settings";
             CreateCurvesModel();
             eventAggregator.Subscribe(this);
@@ -28,6 +31,7 @@ namespace FreePIE.GUI.Shells.Curves
         {
             settingsManager.Settings.RemoveCurve(message.CurveViewModel.Curve);
             Curves.Remove(message.CurveViewModel);
+            eventAggregator.Publish(new CurvesChangedEvent());
         }
 
         private void CreateCurvesModel()
@@ -43,7 +47,8 @@ namespace FreePIE.GUI.Shells.Curves
             if (result.Model.NewCurve != null)
             {
                 settingsManager.Settings.AddNewCurve(result.Model.NewCurve);
-                CreateCurvesModel();                
+                CreateCurvesModel();
+                eventAggregator.Publish(new CurvesChangedEvent());
             }
         }
 
@@ -56,6 +61,11 @@ namespace FreePIE.GUI.Shells.Curves
                 curves = value;
                 NotifyOfPropertyChange(() => Curves);
             }
+        }
+
+        public void Save()
+        {
+            settingsManager.Save();
         }
     }
 }

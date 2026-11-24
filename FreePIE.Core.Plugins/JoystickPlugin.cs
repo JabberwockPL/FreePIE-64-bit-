@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using FreePIE.Core.Contracts;
+using FreePIE.Core.Plugins.Ffb;
 using FreePIE.Core.Plugins.Globals;
 using FreePIE.Core.Plugins.Strategies;
 using SlimDX.DirectInput;
@@ -47,6 +48,7 @@ namespace FreePIE.Core.Plugins
         public override void DoBeforeNextExecute()
         {
             devices.ForEach(d => d.Reset());
+            devices.ForEach(d => d.FlushFfb());
         }
 
         public override string FriendlyName
@@ -60,6 +62,8 @@ namespace FreePIE.Core.Plugins
         private readonly Joystick joystick;
         private JoystickState state;
         private readonly GetPressedStrategy<int> getPressedStrategy;
+        private DirectInputFfbDevice ffbDevice;
+        private FfbSinkGlobal ffb;
 
         public Device(Joystick joystick)
         {
@@ -70,6 +74,9 @@ namespace FreePIE.Core.Plugins
 
         public void Dispose()
         {
+            if (ffbDevice != null)
+                ffbDevice.Dispose();
+
             joystick.Dispose();
         }
 
@@ -78,9 +85,27 @@ namespace FreePIE.Core.Plugins
             get { return state ?? (state = joystick.GetCurrentState()); }
         }
 
+        public FfbSinkGlobal Ffb
+        {
+            get
+            {
+                if (ffb != null)
+                    return ffb;
+
+                ffbDevice = new DirectInputFfbDevice(joystick);
+                return ffb = new FfbSinkGlobal(ffbDevice);
+            }
+        }
+
         public void Reset()
         {
             state = null;
+        }
+
+        public void FlushFfb()
+        {
+            if (ffb != null)
+                ffb.Flush();
         }
 
         public void SetRange(int lowerRange, int upperRange)
@@ -104,6 +129,7 @@ namespace FreePIE.Core.Plugins
     }
 
     [Global(Name = "joystick")]
+    [Documentation("Reads joysticks and gamepads through DirectInput, index by device number or name, joystick[0] or joystick['name']")]
     public class JoystickGlobal
     {
         private readonly Device device;
@@ -115,56 +141,70 @@ namespace FreePIE.Core.Plugins
 
         private JoystickState State { get { return device.State; } }
 
+        [Documentation("Force feedback of the device")]
+        public FfbSinkGlobal ffb { get { return device.Ffb; } }
+
+        [Documentation("Sets the range of the axes, the default is -1000 to 1000")]
         public void setRange(int lowerRange, int upperRange)
         {
             device.SetRange(lowerRange, upperRange);
         }
 
+        [Documentation("True once when the button goes down, false until it has been released and pressed again")]
         public bool getPressed(int button)
         {
             return device.GetPressed(button);
         }
 
+        [Documentation("True while the button is down")]
         public bool getDown(int button)
         {
             return device.GetDown(button);
         }
 
+        [Documentation("X axis")]
         public int x
         {
             get { return State.X; }
         }
 
+        [Documentation("Y axis")]
         public int y
         {
             get { return State.Y; }
         }
 
+        [Documentation("Z axis")]
         public int z
         {
             get { return State.Z;  }
         }
 
+        [Documentation("X rotation axis")]
         public int xRotation
         {
             get { return State.RotationX; }
         }
 
+        [Documentation("Y rotation axis")]
         public int yRotation
         {
             get { return State.RotationY; }
         }
 
+        [Documentation("Z rotation axis")]
         public int zRotation
         {
             get { return State.RotationZ; }
         }
 
+        [Documentation("The slider axes")]
         public int[] sliders
         {
             get { return State.GetSliders(); }
         }
 
+        [Documentation("The point of view hats, the angle in hundredths of a degree clockwise from north or -1 when centered")]
         public int[] pov
         {
             get { return State.GetPointOfViewControllers(); }

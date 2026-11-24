@@ -1,13 +1,16 @@
-﻿using System.Globalization;
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using FreePIE.Core.Common;
 using FreePIE.Core.Common.Events;
 using FreePIE.Core.ScriptEngine;
 using FreePIE.GUI.CodeCompletion;
-using FreePIE.GUI.CodeCompletion.Event.Actions;
 using FreePIE.GUI.Common.AvalonEdit;
 using FreePIE.GUI.Common.CodeCompletion;
 using FreePIE.GUI.Events;
+using FreePIE.GUI.Result;
+using FreePIE.GUI.Shells;
 using FreePIE.GUI.Views.Main;
 
 namespace FreePIE.GUI.Views.Script
@@ -17,21 +20,25 @@ namespace FreePIE.GUI.Views.Script
         private readonly IEventAggregator eventAggregator;
         private readonly ICodeCompletionProvider provider;
         private readonly FileSystem fileSystem;
+        private readonly IResultFactory resultFactory;
 
-        public ScriptEditorViewModel(IEventAggregator eventAggregator, ICodeCompletionProvider provider, CompletionPopupViewModel completionModel, FileSystem fileSystem)
+        public ScriptEditorViewModel(IEventAggregator eventAggregator, ICodeCompletionProvider provider, CompletionPopupViewModel completionModel, FileSystem fileSystem, IResultFactory resultFactory)
         {
             this.eventAggregator = eventAggregator;
             this.provider = provider;
             this.fileSystem = fileSystem;
+            this.resultFactory = resultFactory;
             Replacer = new Replacer();
             CompletionWindow = completionModel;
-            Enabled = true;
-            UpdateCompletionItems();
+            SignatureHelp = new SignatureHelpViewModel();
+            Breakpoints = new Caliburn.Micro.BindableCollection<Breakpoint>();
+            Breakpoints.CollectionChanged += OnBreakpointsChanged;
             eventAggregator.Subscribe(this);
-            completionModel.Observers.Add(new OpenOnWriteAction(IsBeginningOfExpression));
-            completionModel.Observers.Add(new CloseOnSteppingIntoEndOfExpression(() => provider.IsBeginningOfExpression(Script, CaretPosition)));
-            completionModel.Observers.Add(new CloseOnWritingEndOfExpression(IsEndOfExpression));
+            provider.ScriptAnalyzed += (sender, args) => Caliburn.Micro.Execute.BeginOnUIThread(OnScriptAnalyzed);
+            completion = new ScriptCompletion(provider, completionModel, () => script, () => caretPosition, OnInsertion);
         }
+
+        private readonly ScriptCompletion completion;
         
         private static int untitledIndex;
         private int untitledId;
@@ -47,20 +54,15 @@ namespace FreePIE.GUI.Views.Script
             return this;
         }
 
-        private bool IsBeginningOfExpression(char nextChar)
+        private void OnScriptAnalyzed()
         {
-            var caret = CaretPosition;
-            var scriptWithNextChar = (Script ?? string.Empty).Insert(CaretPosition, nextChar.ToString(CultureInfo.InvariantCulture));
-            caret++;
-            return provider.IsBeginningOfExpression(Script, CaretPosition) || provider.IsBeginningOfExpression(scriptWithNextChar, caret);
-        }
-
-        private bool IsEndOfExpression(char nextChar)
-        {
-            return provider.IsEndOfExpressionDelimiter(nextChar);
+            completion.ScriptAnalyzed();
+            UpdateSignatureHelp();
         }
 
         public CompletionPopupViewModel CompletionWindow { get; set; }
+
+        public SignatureHelpViewModel SignatureHelp { get; private set; }
 
         private string script;
         public string Script
@@ -71,18 +73,117 @@ namespace FreePIE.GUI.Views.Script
                 script = value;
                 eventAggregator.Publish(new ScriptUpdatedEvent(value));
                 NotifyOfPropertyChange(() => Script);
+                provider.ScriptChanged(value, caretPosition);
+                UpdateSignatureHelp();
             }
         }
 
-        private bool enabled;
-        public bool Enabled
+        // The script can not be edited while it runs, but breakpoints can be changed and values inspected
+        private bool isReadOnly;
+        public bool IsReadOnly
         {
-            get { return enabled; }
-            set 
-            { 
-                enabled = value; 
-                NotifyOfPropertyChange(() => Enabled);
+            get { return isReadOnly; }
+            set
+            {
+                isReadOnly = value;
+                NotifyOfPropertyChange(() => IsReadOnly);
             }
+        }
+
+        public Caliburn.Micro.BindableCollection<Breakpoint> Breakpoints { get; private set; }
+
+        private int executionLine;
+        // The line where the script is paused, 0 when it's not paused
+        public int ExecutionLine
+        {
+            get { return executionLine; }
+            set
+            {
+                executionLine = value;
+                NotifyOfPropertyChange(() => ExecutionLine);
+            }
+        }
+
+        private int CaretLineNumber
+        {
+            get
+            {
+                var text = script ?? string.Empty;
+                return text.Take(Math.Min(caretPosition, text.Length)).Count(c => c == '\n') + 1;
+            }
+        }
+
+        private Breakpoint GetBreakpoint(int lineNumber)
+        {
+            return Breakpoints.FirstOrDefault(b => b.LineNumber == lineNumber);
+        }
+
+        public void ToggleBreakpoint()
+        {
+            var lineNumber = CaretLineNumber;
+            var breakpoint = GetBreakpoint(lineNumber);
+
+            if (breakpoint != null)
+                Breakpoints.Remove(breakpoint);
+            else
+                Breakpoints.Add(new Breakpoint(lineNumber));
+        }
+
+        public IEnumerable<Caliburn.Micro.IResult> EditBreakpointCondition()
+        {
+            return EditBreakpointCondition(CaretLineNumber);
+        }
+
+        // Creates the breakpoint if the line has none, like Visual Studio
+        public IEnumerable<Caliburn.Micro.IResult> EditBreakpointCondition(int lineNumber)
+        {
+            var existing = GetBreakpoint(lineNumber);
+            var dialog = resultFactory.ShowDialog<BreakpointConditionViewModel>()
+                .Configure(m => m.Init(lineNumber, existing != null ? existing.Condition : null, script));
+
+            yield return dialog;
+
+            if (!dialog.Model.IsAccepted)
+                yield break;
+
+            var breakpoint = new Breakpoint(lineNumber, dialog.Model.Condition);
+            var index = Breakpoints.IndexOf(GetBreakpoint(lineNumber));
+
+            if (index >= 0)
+                Breakpoints[index] = breakpoint;
+            else
+                Breakpoints.Add(breakpoint);
+        }
+
+        public void DeleteAllBreakpoints()
+        {
+            Breakpoints.Clear();
+        }
+
+        private IScriptDebugger debugger;
+
+        public void AttachDebugger(IScriptDebugger scriptDebugger)
+        {
+            debugger = scriptDebugger;
+            debugger.SetBreakpoints(Breakpoints);
+        }
+
+        public void DetachDebugger()
+        {
+            debugger = null;
+            ExecutionLine = 0;
+        }
+
+        private void OnBreakpointsChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (debugger != null)
+                debugger.SetBreakpoints(Breakpoints);
+        }
+
+        // Describes the value of the expression at index while the script is paused, null if there is nothing to show
+        public string GetValueDescription(int index)
+        {
+            return debugger != null && debugger.IsPaused ? debugger.Evaluate(script, index) : null;
         }
 
         public Replacer Replacer { get; set; }
@@ -97,22 +198,21 @@ namespace FreePIE.GUI.Views.Script
                 if (caretPosition == value) return;
 
                 caretPosition = value;
-                UpdateCompletionItems();
+
+                completion.CaretChanged();
+
+                UpdateSignatureHelp();
                 NotifyOfPropertyChange(() => CaretPosition);
             }
         }
 
-        private void UpdateCompletionItems()
+        private void UpdateSignatureHelp()
         {
-            var codeResults = provider.GetSuggestionsForExpression(script, caretPosition);
+            if (SignatureHelp == null)
+                return;
 
-            var suggestions = codeResults.ExpressionInfos.Select(x =>
-                new CompletionItem(x, codeResults.ActiveToken.Value, codeResults.ReplaceRange, script, OnInsertion));
-
-            CompletionWindow.CompletionItems.Clear();
-            CompletionWindow.CompletionItems.AddRange(suggestions);
-            if (CompletionWindow.CompletionItems.Any())
-                CompletionWindow.SelectedCompletionItem = CompletionWindow.CompletionItems.First();
+            var caret = Math.Min(caretPosition, (script ?? string.Empty).Length);
+            SignatureHelp.Update(provider.GetSignatureHelp(script, caret));
         }
 
         private void OnInsertion(string insertedScript, int caretOffset, int range)
@@ -165,6 +265,7 @@ namespace FreePIE.GUI.Views.Script
         public void LoadFileContent(string content)
         {
             script = content;
+            provider.ScriptChanged(content, 0);
 			ResetDirtyFlag();
         }
 
@@ -195,7 +296,7 @@ namespace FreePIE.GUI.Views.Script
 
         public void Handle(ScriptStateChangedEvent message)
         {
-            Enabled = !message.Running;
+            IsReadOnly = message.Running;
         }
     }
 }

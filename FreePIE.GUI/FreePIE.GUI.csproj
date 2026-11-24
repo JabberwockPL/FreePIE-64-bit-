@@ -113,10 +113,14 @@
     <Compile Include="Common\AvalonDock\AutobinderTemplateSelector.cs" />
     <Compile Include="Common\AvalonDock\DocumentContext.cs" />
     <Compile Include="Common\AvalonEdit\BindableScriptEditor.cs" />
+    <Compile Include="Common\AvalonEdit\BreakpointConditionRequestedEventArgs.cs" />
+    <Compile Include="Common\AvalonEdit\BreakpointMargin.cs" />
+    <Compile Include="Common\AvalonEdit\DebuggerBackgroundRenderer.cs" />
     <Compile Include="Common\Caliburn\ActionMessageCommand.cs" />
     <Compile Include="Common\Caliburn\GestureMenuItem.cs" />
     <Compile Include="Common\Caliburn\InputBindingTrigger.cs" />
     <Compile Include="Common\CodeCompletion\CompletionItem.cs" />
+    <Compile Include="Common\CodeCompletion\ScriptCompletion.cs" />
     <Compile Include="Common\CommandLine\Commands\Command.cs" />
     <Compile Include="Common\CommandLine\Commands\FileCommand.cs" />
     <Compile Include="Common\CommandLine\Commands\RunCommand.cs" />
@@ -153,6 +157,10 @@
       <DependentUpon>AboutView.xaml</DependentUpon>
     </Compile>
     <Compile Include="Shells\AboutViewModel.cs" />
+    <Compile Include="Shells\BreakpointConditionView.xaml.cs">
+      <DependentUpon>BreakpointConditionView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Shells\BreakpointConditionViewModel.cs" />
     <Compile Include="Shells\Curves\CurveSettingsView.xaml.cs">
       <DependentUpon>CurveSettingsView.xaml</DependentUpon>
     </Compile>
@@ -225,7 +233,12 @@
       <DependentUpon>ScriptEditorView.xaml</DependentUpon>
     </Compile>
     <Compile Include="Views\Script\ScriptEditorViewModel.cs" />
+    <Compile Include="Views\Script\SignatureHelpViewModel.cs" />
     <Page Include="Shells\AboutView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="Shells\BreakpointConditionView.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
@@ -430,6 +443,15 @@
   <ItemGroup>
     <Resource Include="Resources\close-16.png" />
   </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\step-in-16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\step-over-16.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Resources\step-out-16.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>md "$(TargetDir)plugins"
@@ -450,7 +472,8 @@ copy "$(SolutionDir)\Lib\IO\Binaries\Release-DllMultiThreadRuntime\*.dll" "$(Tar
 copy "$(SolutionDir)\Lib\OculusVR\Binaries\*.dll" "$(TargetDir)"
 copy "$(SolutionDir)\Lib\VJoy\*.dll" "$(TargetDir)"
 copy "$(SolutionDir)\Lib\Midi\*.dll" "$(TargetDir)"
-copy "$(SolutionDir)\Lib\Tobii\*.dll" "$(TargetDir)"</PostBuildEvent>
+copy "$(SolutionDir)\Lib\Tobii\*.dll" "$(TargetDir)"
+copy "$(SolutionDir)\packages\Nefarius.ViGEm.Client.1.21.256\lib\netstandard2.0\*.dll" "$(TargetDir)"</PostBuildEvent>
   </PropertyGroup>
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
